@@ -47,6 +47,11 @@ var BUILD_DIR = './build/';
         output.to(BUILD_DIR + 'load-rules.js');
     }
 
+    /**
+     * 将 lib/js/rules/index.js 文件中读文件的部分转化成写死的内容。
+     *
+     * @param {string} basedir 规则目录
+     */
     function generateOwnRulesModule(basedir) {
         var fs = require('fs');
         var output = ''
@@ -97,9 +102,22 @@ var BUILD_DIR = './build/';
         output.to(BUILD_DIR + 'rules/index.js');
     }
 
+    /**
+     * 生成一个支持 browserify 的jschecker 文件，主要是将读 config 的那部分换掉
+     *
+     * @param {string} tmpl jschecker 模板文件
+     * @param {string} configFile eslint 配置文件目录
+     */
     function generateJSChecker(tmpl, configFile) {
         var fs = require('fs');
 
+        /**
+         * 替换模板文件中的占位符
+         *
+         * @param {string} tmpl checker 模板文件
+         * @param {Object} options 模板文件中占位符对应内容
+         * @return {string} result 替换后的内容
+         */
         function parseTmpl(tmpl, options) {
             var reg = /{{(\w+)}}/;
             // console.log(options);
@@ -136,7 +154,8 @@ var BUILD_DIR = './build/';
 
         // 3. 删除需要 fs 模块的目录
         // TODO 其实可以试着将这些地方 -t brfs 转换..
-        // TODO 否定上面的TODO，brfs 灵活性太差了...
+        // TODO 否定上面的TODO，brfs 灵活性太差了...体现在只有四种方法替换，而且相应方法的 patternDir 只支持 statically analyzable expressions
+        // brfs 可见: https://www.npmjs.com/package/brfs
         generateRulesIndex('./node_modules/eslint/lib/');
         generateOwnRulesModule('./lib/js/rules/');
         generateJSChecker('./tmpl/checker.md', TEMP_DIR + 'js/eslint.json');
@@ -152,10 +171,12 @@ var BUILD_DIR = './build/';
         mv(BUILD_DIR + 'checker.js', TEMP_DIR + 'js/checker.js');
 
         // 6. browserify jschecker
+        // 使用了 -x 也有问题=。=||
         nodeCLI.exec('browserify', TEMP_DIR + 'js/checker.js', '-o', BUILD_DIR + 'jschecker.js', '-s jschecker');
 
         nodeCLI.exec('browserify', '-r espree', '-o', TEMP_DIR + 'espree.js');
 
+        // eslint 使用 babel-eslint 作为 parser 会检查不了...
         nodeCLI.exec('browserify', '-r babel-eslint', '-o', TEMP_DIR + 'babel-eslint.js');
 
         // 7. browserify babel-eslint 和 espree （ eslint 中 parse 通过 require('options')，所以browserify）
@@ -163,14 +184,11 @@ var BUILD_DIR = './build/';
         // cat(BUILD_DIR + "babel-eslint.js", BUILD_DIR + "jschecker.js").to(BUILD_DIR + "jschecker.js");
         cat(TEMP_DIR + 'espree.js', BUILD_DIR + 'jschecker.js').to(BUILD_DIR + 'jschecker.js');
 
+        // 8. 删除多余文件，可以试试压缩看看
         rm('-r', TEMP_DIR);
         rm('-r', BUILD_DIR + 'rules');
         rm('-f', './node_modules/eslint/lib/load-rules.js');
 
         mv('./node_modules/eslint/lib/load-rules-tmp.js', './node_modules/eslint/lib/load-rules.js');
-
-    //
-    // 8. 删除多余文件，可以试试压缩看看
     };
-
 })();
